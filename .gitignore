@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+.next
+out
+build
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Turbo
+.turbo
+
+# Testing
+coverage
+playwright-report
+test-results
+
+# Claude Code / claude-flow
+.claude/
+.claude-flow/
+.mcp.json
+
+# Misc
+.DS_Store
+*.log
+*.tsbuildinfo
+
+# Prisma
+prisma/dev.db
+prisma/test.db

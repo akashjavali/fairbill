@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserPlan {
+  free
+  pro
+}
+
+enum BillStatus {
+  uploading
+  ocr_processing
+  ready
+  auditing
+  audited
+  failed
+}
+
+enum BillType {
+  medical
+  legal
+  home_repair
+  utility
+  other
+}
+
+enum AuditStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum LineItemStatus {
+  fair
+  high
+  overcharged
+}
+
+enum PaymentType {
+  subscription
+  one_time
+}
+
+enum PaymentPlan {
+  pro
+  audit_single
+}
+
+enum PaymentProvider {
+  razorpay
+  stripe
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+model User {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                String    @unique
+  passwordHash         String?
+  fullName             String?
+  avatarUrl            String?
+  plan                 UserPlan  @default(free)
+  auditsUsedThisMonth  Int       @default(0)
+  auditsResetAt        DateTime?
+  googleId             String?   @unique
+  isVerified           Boolean   @default(false)
+  refreshTokenHash     String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  bills    Bill[]
+  audits   Audit[]
+  payments Payment[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Bill {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String     @db.Uuid
+  originalFilename String
+  fileUrl          String
+  extractedText    String?
+  correctedText    String?
+  billType         BillType
+  currency         String     @default("INR")
+  totalAmount      Decimal?   @db.Decimal(10, 2)
+  status           BillStatus @default(uploading)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audits Audit[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("bills")
+}
+
+model Audit {
+  id                 String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  billId             String      @db.Uuid
+  userId             String      @db.Uuid
+  fairnessScore      Int?
+  estimatedFairTotal Decimal?    @db.Decimal(10, 2)
+  potentialSavings   Decimal?    @db.Decimal(10, 2)
+  explanation        String?
+  negotiationScript  String?
+  aiProvider         String?
+  aiModel            String?
+  aiRawResponse      Json?
+  status             AuditStatus @default(pending)
+  isPublic           Boolean     @default(false)
+  publicToken        String?     @unique
+  pdfUrl             String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  bill      Bill            @relation(fields: [billId], references: [id])
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lineItems AuditLineItem[]
+  payments  Payment[]
+
+  @@index([userId])
+  @@index([publicToken])
+  @@map("audits")
+}
+
+model AuditLineItem {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  auditId        String         @db.Uuid
+  description    String
+  chargedAmount  Decimal        @db.Decimal(10, 2)
+  fairAmount     Decimal        @db.Decimal(10, 2)
+  status         LineItemStatus
+  reason         String
+  position       Int
+
+  audit Audit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId])
+  @@map("audit_line_items")
+}
+
+model Payment {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String          @db.Uuid
+  auditId           String?         @db.Uuid
+  amount            Decimal         @db.Decimal(10, 2)
+  currency          String
+  paymentType       PaymentType
+  plan              PaymentPlan
+  provider          PaymentProvider
+  providerPaymentId String?
+  providerOrderId   String
+  status            PaymentStatus   @default(pending)
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audit Audit? @relation(fields: [auditId], references: [id])
+
+  @@index([userId])
+  @@index([providerPaymentId])
+  @@map("payments")
+}
